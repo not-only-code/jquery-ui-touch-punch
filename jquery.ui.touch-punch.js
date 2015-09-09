@@ -21,7 +21,8 @@
   var mouseProto = $.ui.mouse.prototype,
       _mouseInit = mouseProto._mouseInit,
       _mouseDestroy = mouseProto._mouseDestroy,
-      touchHandled;
+      touchHandled, dragging = false, timeout,
+      delay = 100;
 
   /**
    * Simulate a mouse event based on a corresponding touch event
@@ -63,6 +64,31 @@
     event.target.dispatchEvent(simulatedEvent);
   }
 
+  var initTouch = function (event) {
+
+    clearTimeout(timeout);
+    timeout = setTimeout(function() {
+
+      dragging = true
+
+      // Set the flag to prevent other widgets from inheriting the touch event
+      touchHandled = true;
+
+      // Track movement to determine if interaction was a click
+      self._touchMoved = false;
+
+      // Simulate the mouseover event
+      simulateMouseEvent(event, 'mouseover');
+
+      // Simulate the mousemove event
+      simulateMouseEvent(event, 'mousemove');
+
+      // Simulate the mousedown event
+      simulateMouseEvent(event, 'mousedown');
+
+    }, delay);
+  }
+
   /**
    * Handle the jQuery UI widget's touchstart events
    * @param {Object} event The widget element's touchstart event
@@ -71,8 +97,12 @@
 
     var self = this;
 
+    if (!dragging) {
+      initTouch(event);
+    }
+
     // Ignore the event if another widget is already being handled
-    if (touchHandled || !self._mouseCapture(event.originalEvent.changedTouches[0])) {
+    if (!dragging || touchHandled || !self._mouseCapture(event.originalEvent.changedTouches[0])) {
       return;
     }
 
@@ -98,8 +128,12 @@
    */
   mouseProto._touchMove = function (event) {
 
+    if (!dragging) {
+      clearTimeout(timeout);
+    }
+
     // Ignore event if not handled
-    if (!touchHandled) {
+    if (!touchHandled && !dragging) {
       return;
     }
 
@@ -108,6 +142,7 @@
 
     // Simulate the mousemove event
     simulateMouseEvent(event, 'mousemove');
+    event.preventDefault()
   };
 
   /**
@@ -115,6 +150,8 @@
    * @param {Object} event The document's touchend event
    */
   mouseProto._touchEnd = function (event) {
+
+    clearTimeout(timeout);
 
     // Ignore event if not handled
     if (!touchHandled) {
@@ -128,14 +165,14 @@
     simulateMouseEvent(event, 'mouseout');
 
     // If the touch interaction did not move, it should trigger a click
-    if (!this._touchMoved) {
-
+    if (!this._touchMoved && !dragging) {
       // Simulate the click event
       simulateMouseEvent(event, 'click');
     }
 
     // Unset the flag to allow other widgets to inherit the touch event
     touchHandled = false;
+    dragging = false
   };
 
   /**
